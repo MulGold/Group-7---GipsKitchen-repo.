@@ -19,6 +19,11 @@ function getPerformer(req: Request): string {
   return role ? `User (${role})` : 'Staff / Admin';
 }
 
+// Helper to normalize decimal quantities to 6 decimal places to prevent IEEE 754 floating-point drift
+function roundDecimal(val: number): number {
+  return Number(val.toFixed(6));
+}
+
 // 1. GET /api/inventory/reorder - Get items that need reordering (quantity <= lowStockThreshold)
 router.get('/reorder', async (req: Request, res: Response) => {
   try {
@@ -372,19 +377,19 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Item name is required' });
     }
 
-    const parsedQty = quantity !== undefined && quantity !== null ? Number(quantity) : 0;
+    const parsedQty = quantity !== undefined && quantity !== null ? roundDecimal(Number(quantity)) : 0;
     if (isNaN(parsedQty) || parsedQty < 0) {
       return res.status(400).json({ error: 'Quantity must be a non-negative number' });
     }
 
     const cleanUnit = (unit && typeof unit === 'string' && unit.trim()) ? unit.trim() : 'pcs';
 
-    const parsedStable = stableQuantity !== undefined && stableQuantity !== null ? Number(stableQuantity) : 0;
+    const parsedStable = stableQuantity !== undefined && stableQuantity !== null ? roundDecimal(Number(stableQuantity)) : 0;
     if (isNaN(parsedStable) || parsedStable < 0) {
       return res.status(400).json({ error: 'Stable quantity must be a non-negative number' });
     }
 
-    const parsedThreshold = lowStockThreshold !== undefined && lowStockThreshold !== null ? Number(lowStockThreshold) : 10;
+    const parsedThreshold = lowStockThreshold !== undefined && lowStockThreshold !== null ? roundDecimal(Number(lowStockThreshold)) : 10;
     if (isNaN(parsedThreshold) || parsedThreshold < 0) {
       return res.status(400).json({ error: 'Low stock threshold must be a non-negative number' });
     }
@@ -476,7 +481,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       if (isNaN(parsedStable) || parsedStable < 0) {
         return res.status(400).json({ error: 'Stable quantity must be a non-negative number' });
       }
-      updates.stableQuantity = parsedStable;
+      updates.stableQuantity = roundDecimal(parsedStable);
     }
 
     if (lowStockThreshold !== undefined) {
@@ -484,7 +489,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       if (isNaN(parsedThreshold) || parsedThreshold < 0) {
         return res.status(400).json({ error: 'Low stock threshold must be a non-negative number' });
       }
-      updates.lowStockThreshold = parsedThreshold;
+      updates.lowStockThreshold = roundDecimal(parsedThreshold);
     }
 
     let qtyChanged = false;
@@ -496,8 +501,9 @@ router.put('/:id', async (req: Request, res: Response) => {
       if (isNaN(parsedQty) || parsedQty < 0) {
         return res.status(400).json({ error: 'Quantity must be a non-negative number' });
       }
-      updates.quantity = parsedQty;
-      newQty = parsedQty;
+      const roundedQty = roundDecimal(parsedQty);
+      updates.quantity = roundedQty;
+      newQty = roundedQty;
       qtyChanged = true;
     }
 
@@ -523,7 +529,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
       // Log quantity change if any
       if (qtyChanged && oldQty !== newQty) {
-        const diff = newQty - oldQty;
+        const diff = roundDecimal(newQty - oldQty);
         await InventoryLog.create({
           id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           inventoryId: currentItem.id,
@@ -555,7 +561,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
 
       if (qtyChanged && oldQty !== newQty) {
-        const diff = newQty - oldQty;
+        const diff = roundDecimal(newQty - oldQty);
         memoryStore.inventoryLogs.push({
           id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           inventoryId: currentItem.id,
@@ -611,7 +617,7 @@ router.patch('/:id/stock', async (req: Request, res: Response) => {
       return res.status(404).json({ error: `Inventory item with ID ${rawId} not found` });
     }
 
-    const currentQty = Number(item.quantity) || 0;
+    const currentQty = roundDecimal(Number(item.quantity) || 0);
     let targetQty = currentQty;
     let qtyChange = 0;
 
@@ -620,27 +626,29 @@ router.patch('/:id/stock', async (req: Request, res: Response) => {
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ error: 'Stock-in amount must be a positive number' });
       }
-      targetQty = currentQty + parsedAmount;
-      qtyChange = parsedAmount;
+      const roundedAmount = roundDecimal(parsedAmount);
+      targetQty = roundDecimal(currentQty + roundedAmount);
+      qtyChange = roundedAmount;
     } else if (type === 'stock-out' || type === 'order-deduction') {
       const parsedAmount = Number(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ error: 'Stock-out amount must be a positive number' });
       }
-      if (currentQty < parsedAmount) {
+      const roundedAmount = roundDecimal(parsedAmount);
+      if (currentQty < roundedAmount) {
         return res.status(400).json({ 
-          error: `Insufficient stock for ${item.name}. Current stock: ${currentQty} ${item.unit}, attempted deduction: ${parsedAmount} ${item.unit}. Quantity cannot become negative.` 
+          error: `Insufficient stock for ${item.name}. Current stock: ${currentQty} ${item.unit}, attempted deduction: ${roundedAmount} ${item.unit}. Quantity cannot become negative.` 
         });
       }
-      targetQty = Math.max(0, currentQty - parsedAmount);
-      qtyChange = -parsedAmount;
+      targetQty = Math.max(0, roundDecimal(currentQty - roundedAmount));
+      qtyChange = roundDecimal(-roundedAmount);
     } else if (type === 'manual-adjustment') {
       const parsedNewQty = newQuantity !== undefined ? Number(newQuantity) : Number(amount);
       if (isNaN(parsedNewQty) || parsedNewQty < 0) {
         return res.status(400).json({ error: 'Manual adjustment quantity must be a non-negative number' });
       }
-      targetQty = parsedNewQty;
-      qtyChange = targetQty - currentQty;
+      targetQty = roundDecimal(parsedNewQty);
+      qtyChange = roundDecimal(targetQty - currentQty);
     }
 
     const logRecord = {
