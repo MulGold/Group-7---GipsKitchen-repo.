@@ -87,7 +87,10 @@ router.get('/turnover', async (req: Request, res: Response) => {
     }
 
     const periodStart = new Date(String(startDate));
-    const periodEnd = new Date(String(endDate));
+    let periodEnd = new Date(String(endDate));
+    if (typeof endDate === 'string' && !endDate.includes('T') && !endDate.includes(':')) {
+      periodEnd = new Date(`${endDate}T23:59:59.999Z`);
+    }
 
     if (isNaN(periodStart.getTime()) || isNaN(periodEnd.getTime())) {
       return res.status(400).json({ error: 'Invalid startDate or endDate format' });
@@ -178,19 +181,18 @@ router.get('/turnover', async (req: Request, res: Response) => {
         // 2. Logs during the period
         const periodLogs = periodLogsByItem.get(itemId) || [];
 
-        // 3. Used calculation:
-        // Sum only type = 'order-deduction' (quantityChange is negative, so Math.abs)
-        // Offset by 'order-cancellation-restock' in the same period to avoid inflating usage
-        let orderDeductions = 0;
+        // 3. Used calculation: Cumulative inventory consumption during the selected period
+        // Includes order-deduction and stock-out, offset by order-cancellation-restock
+        let consumption = 0;
         let cancellationRestocks = 0;
         for (const log of periodLogs) {
-          if (log.type === 'order-deduction') {
-            orderDeductions += Math.abs(Number(log.quantityChange ?? 0));
+          if (log.type === 'order-deduction' || log.type === 'stock-out') {
+            consumption += Math.abs(Number(log.quantityChange ?? 0));
           } else if (log.type === 'order-cancellation-restock') {
             cancellationRestocks += Math.abs(Number(log.quantityChange ?? 0));
           }
         }
-        const used = Math.max(0, Number((orderDeductions - cancellationRestocks).toFixed(4)));
+        const used = Math.max(0, Number((consumption - cancellationRestocks).toFixed(4)));
 
         // 4. Ending Stock calculation:
         // Latest log during the period, or beginningStock if no activity in period
@@ -202,11 +204,14 @@ router.get('/turnover', async (req: Request, res: Response) => {
           endingStock = beginningStock;
         }
 
-        // 5. Average Inventory & Turnover:
+        // 5. Average Inventory & Turnover Rate:
+        // Turnover Rate = (Used Stock ÷ Average Inventory) × 100
         const averageInventory = Number(((beginningStock + endingStock) / 2).toFixed(4));
         let turnover: number | null = null;
         if (averageInventory > 0) {
-          turnover = Number((used / averageInventory).toFixed(4));
+          turnover = Number(((used / averageInventory) * 100).toFixed(4));
+        } else {
+          turnover = 0;
         }
 
         return {
@@ -255,16 +260,18 @@ router.get('/turnover', async (req: Request, res: Response) => {
           beginningStock = Number(item.quantity ?? 0);
         }
 
-        let orderDeductions = 0;
+        // Cumulative inventory consumption during the selected period
+        // Includes order-deduction and stock-out, offset by order-cancellation-restock
+        let consumption = 0;
         let cancellationRestocks = 0;
         for (const log of periodLogs) {
-          if (log.type === 'order-deduction') {
-            orderDeductions += Math.abs(Number(log.quantityChange ?? 0));
+          if (log.type === 'order-deduction' || log.type === 'stock-out') {
+            consumption += Math.abs(Number(log.quantityChange ?? 0));
           } else if (log.type === 'order-cancellation-restock') {
             cancellationRestocks += Math.abs(Number(log.quantityChange ?? 0));
           }
         }
-        const used = Math.max(0, Number((orderDeductions - cancellationRestocks).toFixed(4)));
+        const used = Math.max(0, Number((consumption - cancellationRestocks).toFixed(4)));
 
         let endingStock: number;
         if (periodLogs.length > 0) {
@@ -274,10 +281,13 @@ router.get('/turnover', async (req: Request, res: Response) => {
           endingStock = beginningStock;
         }
 
+        // Turnover Rate = (Used Stock ÷ Average Inventory) × 100
         const averageInventory = Number(((beginningStock + endingStock) / 2).toFixed(4));
         let turnover: number | null = null;
         if (averageInventory > 0) {
-          turnover = Number((used / averageInventory).toFixed(4));
+          turnover = Number(((used / averageInventory) * 100).toFixed(4));
+        } else {
+          turnover = 0;
         }
 
         return {

@@ -572,7 +572,7 @@ const SalesReport = () => {
 
     // Rules for small datasets & 3-way ranking
     if (nPos === 1) {
-      // B. ONE positive-turnover item: That item is HIGH / GREEN. All 0.00× items are LOW / RED.
+      // B. ONE positive-turnover item: That item is HIGH / GREEN. All 0.00% items are LOW / RED.
       map.set(positiveItems[0].id, 'high');
     } else if (nPos === 2) {
       // C. TWO positive-turnover items: Highest positive turnover = HIGH / GREEN. Lower positive turnover = LOW / RED. Do NOT force a Moderate item.
@@ -1052,7 +1052,7 @@ const SalesReport = () => {
                   <tbody className="divide-y divide-gray-200 text-xs">
                     {sortedTurnoverItems.map((item) => {
                       const turnoverDisplay = (item.turnover !== null && item.turnover !== undefined && !isNaN(item.turnover))
-                        ? `${item.turnover.toFixed(2)}×`
+                        ? `${item.turnover.toFixed(2)}%`
                         : '—';
                       const tier = turnoverTierMap.get(item.id) || 'low';
                       const badgeClasses = tier === 'high'
