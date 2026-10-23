@@ -1070,7 +1070,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
                   if (session) pQuery.session(session);
                   p = await pQuery;
                 } else if (item.id) {
-                  const pQuery = Product.findById(item.id);
+                  const pQuery = mongoose.isValidObjectId(String(item.id)) ? Product.findById(item.id) : Product.findOne({ id: item.id as any });
                   if (session) pQuery.session(session);
                   p = await pQuery;
                 }
@@ -1093,7 +1093,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
                 if (session) prodQuery.session(session);
                 prod = await prodQuery;
               } else if (item.id) {
-                const prodQuery = Product.findById(item.id);
+                const prodQuery = mongoose.isValidObjectId(String(item.id)) ? Product.findById(item.id) : Product.findOne({ id: item.id as any });
                 if (session) prodQuery.session(session);
                 prod = await prodQuery;
               }
@@ -1111,9 +1111,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
                   if (!invId || isNaN(deductionRate) || deductionRate <= 0) continue;
 
                   const totalRestore = Number((deductionRate * qty).toFixed(6));
-                  const invQuery = InventoryItem.findOne({ id: invId });
-                  if (session) invQuery.session(session);
-                  const invItem = await invQuery;
+                  const invItem = await findInventoryItemDoc(invId, session);
 
                   if (invItem) {
                     const prevQty = Number(invItem.quantity) || 0;
@@ -1161,9 +1159,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
 
                 if (linkIds.length > 0) {
                   for (const invId of linkIds) {
-                    const invQuery = InventoryItem.findOne({ id: invId });
-                    if (session) invQuery.session(session);
-                    const invItem = await invQuery;
+                    const invItem = await findInventoryItemDoc(invId, session);
 
                     if (invItem) {
                       const prevQty = Number(invItem.quantity) || 0;
@@ -1359,7 +1355,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
               if (!invId || isNaN(deductionRate) || deductionRate <= 0) continue;
 
               const totalRestore = Number((deductionRate * qty).toFixed(6));
-              const invItem = memoryStore.inventory.find(inv => inv.id === invId);
+              const invItem = findInventoryItemInMemory(invId);
               if (invItem) {
                 if (!inventorySnapshots.has(invId)) {
                   inventorySnapshots.set(invId, invItem.quantity);
@@ -1408,7 +1404,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
 
             if (linkIds.length > 0) {
               for (const invId of linkIds) {
-                const invItem = memoryStore.inventory.find(inv => inv.id === invId);
+                const invItem = findInventoryItemInMemory(invId);
                 if (invItem) {
                   if (!inventorySnapshots.has(invId)) {
                     inventorySnapshots.set(invId, invItem.quantity);
@@ -1455,7 +1451,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
         targetOrder.inventoryRestoredAt = new Date();
       } catch (memErr) {
         for (const [invId, originalQty] of inventorySnapshots.entries()) {
-          const invItem = memoryStore.inventory.find(inv => inv.id === invId);
+          const invItem = findInventoryItemInMemory(invId);
           if (invItem) invItem.quantity = originalQty;
         }
         for (const [prodId, originalStock] of productSnapshots.entries()) {
