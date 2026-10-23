@@ -145,7 +145,6 @@ const TransactionHistory = () => {
                           src={order.paymentScreenshot} 
                           alt="Receipt" 
                           className="w-full h-full object-cover" 
-                          referrerPolicy="no-referrer"
                         />
                       </div>
                     </button>
@@ -256,7 +255,6 @@ const TransactionHistory = () => {
                   src={previewImage} 
                   alt="Receipt Preview" 
                   className="max-w-full max-h-[80vh] object-contain rounded-lg"
-                  referrerPolicy="no-referrer"
                 />
               </div>
             </div>

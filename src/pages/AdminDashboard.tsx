@@ -297,7 +297,6 @@ const AdminDashboard = () => {
                               src={order.paymentScreenshot} 
                               alt="Receipt" 
                               className="w-full h-full object-cover" 
-                              referrerPolicy="no-referrer"
                             />
                           </div>
                           <div className="absolute inset-0 bg-dark/60 opacity-0 group-hover/receipt:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center">
@@ -471,7 +470,6 @@ const AdminDashboard = () => {
                 src={previewImage} 
                 alt="Receipt Preview" 
                 className="max-w-full max-h-[80vh] object-contain rounded-lg"
-                referrerPolicy="no-referrer"
               />
             </div>
           </div>

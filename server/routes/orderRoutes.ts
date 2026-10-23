@@ -1492,8 +1492,7 @@ router.patch('/:id/payment', authenticateToken, async (req: Request, res: Respon
       const isString = typeof paymentScreenshot === 'string';
       const allowedPrefixes = [
         'data:image/jpeg;base64,',
-        'data:image/png;base64,',
-        'data:image/webp;base64,'
+        'data:image/png;base64,'
       ];
 
       const matchedPrefix = isString ? allowedPrefixes.find(p => paymentScreenshot.startsWith(p)) : null;
@@ -1512,7 +1511,7 @@ router.patch('/:id/payment', authenticateToken, async (req: Request, res: Respon
 
       if (!isString || !matchedPrefix || !isValidLength || !isValidBase64) {
         return res.status(400).json({
-          error: "Payment receipt must be a valid image (JPEG, PNG, or WebP) and must not exceed the allowed size."
+          error: "Payment receipt must be a valid image (JPG or PNG) and must not exceed the allowed size."
         });
       }
     }

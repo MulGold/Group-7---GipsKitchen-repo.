@@ -147,7 +147,7 @@ function compressReceiptImage(file: File): Promise<string> {
 
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('Failed to load image file. Please ensure the file is a valid image.'));
+      reject(new Error('Failed to load image file. Please ensure the file is a valid JPG or PNG image.'));
     };
 
     img.src = objectUrl;
@@ -161,17 +161,17 @@ function compressReceiptImage(file: File): Promise<string> {
     // Reset input value so selecting the same file again triggers the event
     e.target.value = '';
 
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    const allowedExtensions = /\.(jpe?g|png|webp)$/i;
+    const allowedMimeTypes = ['image/jpeg', 'image/png'];
+    const allowedExtensions = /\.(jpe?g|png)$/i;
 
     const fileType = (file.type || '').toLowerCase();
     const fileName = (file.name || '').toLowerCase();
 
-    // Reject PDF, DOC/DOCX, TXT, ZIP, and other non-image files
+    // Reject non-image files such as .docx, PDF, txt, etc.
     if (!allowedMimeTypes.includes(fileType) || !allowedExtensions.test(fileName)) {
       setPaymentError(prev => ({
         ...prev,
-        [orderId]: "Please upload a valid receipt image (JPEG, PNG, or WebP). PDF and document files are not supported."
+        [orderId]: "Please upload a valid receipt image (JPG or PNG). Unsupported files such as .docx or PDF are not supported."
       }));
       return;
     }
@@ -377,11 +377,11 @@ function compressReceiptImage(file: File): Promise<string> {
                                     <Upload size={24} />
                                   </div>
                                   <p className="text-dark font-bold text-sm mb-0.5">Click or drag screenshot here</p>
-                                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">PNG, JPG, JPEG or WEBP image</p>
+                                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">PNG, JPG, or JPEG image</p>
                                 </>
                               )}
                             </div>
-                            <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(e) => handleFileUpload(bill.id, e)} disabled={uploading === bill.id} />
+                            <input type="file" className="hidden" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onChange={(e) => handleFileUpload(bill.id, e)} disabled={uploading === bill.id} />
                           </label>
                         </div>
                       )}
