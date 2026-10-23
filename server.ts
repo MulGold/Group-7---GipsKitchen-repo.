@@ -528,7 +528,7 @@ async function startServer() {
 
       // Check Account Status (Active / Suspended)
       const userStatus = matchedUser.status || 'Active';
-      if (userStatus === 'Suspended') {
+      if (String(userStatus).trim().toLowerCase() === 'suspended') {
         return res.status(403).json({ 
           error: 'Your account is currently suspended. Please contact store management.' 
         });
