@@ -71,6 +71,10 @@ const Checkout = () => {
       setFormError('Phone number must contain exactly 11 digits.');
       return;
     }
+    if (!cleanPhone.startsWith('09')) {
+      setFormError('Phone number must be a valid Philippine mobile number starting with 09 (e.g. 09123456789).');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -168,6 +172,7 @@ const Checkout = () => {
               value={formData.phone}
               placeholder="e.g. 09123456789"
               maxLength={11}
+              pattern="09[0-9]{9}"
               required 
               onChange={handlePhoneChange} 
               className="w-full bg-white border border-gray-300 px-4 py-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-sm text-dark placeholder:text-gray-400" 
