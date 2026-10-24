@@ -435,12 +435,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newAcc)
       });
-      if (res.ok) {
-        const created = await res.json();
-        setAccounts(prev => [created, ...prev.filter(a => a.email !== created.email && a.id !== created.id)]);
-        return created;
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to create user account.');
       }
-    } catch (err) {
+      const created = await res.json();
+      setAccounts(prev => [created, ...prev.filter(a => a.email !== created.email && a.id !== created.id)]);
+      return created;
+    } catch (err: any) {
+      if (err.message && !err.message.toLowerCase().includes('failed to fetch')) {
+        throw err;
+      }
       console.warn('API error creating account, saving locally:', err);
     }
 

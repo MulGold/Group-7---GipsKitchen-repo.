@@ -26,6 +26,36 @@ import {
   ChevronDown
 } from 'lucide-react';
 
+// Full Name format validator: letters, spaces, hyphens, and apostrophes; no numbers; not entirely symbols
+const validateFullName = (name: unknown): { isValid: boolean; error?: string } => {
+  if (typeof name !== 'string') {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  const cleanName = name.trim();
+  if (!cleanName) {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  if (cleanName.length > 50) {
+    return { isValid: false, error: 'Full Name cannot exceed 50 characters.' };
+  }
+  if (/[0-9]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name must not contain numbers.' };
+  }
+  if (!/[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name cannot be made entirely of symbols.' };
+  }
+  if (!/^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\s'-]+$/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name can only contain letters, spaces, hyphens, and apostrophes.' };
+  }
+  return { isValid: true };
+};
+
+// Email format validator: rejects invalid formats such as "1@1"
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/i;
+  return emailRegex.test(email.trim());
+};
+
 export const AccountManagement = () => {
   const { 
     accounts = [], 
@@ -74,9 +104,29 @@ export const AccountManagement = () => {
     setFormError('');
     const cleanEmail = formData.email.trim().toLowerCase();
     const cleanName = formData.name.trim();
+    const cleanPassword = formData.password.trim();
 
-    if (!cleanName || !cleanEmail || !formData.password.trim()) {
+    if (!cleanName || !cleanEmail || !cleanPassword) {
       setFormError('All fields are required.');
+      return;
+    }
+
+    // 1. Full Name: Reject names containing numbers or consisting entirely of symbols
+    const nameCheck = validateFullName(cleanName);
+    if (!nameCheck.isValid) {
+      setFormError(nameCheck.error || 'Full Name is invalid.');
+      return;
+    }
+
+    // 2. Email: Reject invalid email addresses such as "1@1"
+    if (!isValidEmail(cleanEmail)) {
+      setFormError('Please enter a valid email address.');
+      return;
+    }
+
+    // 3. Password: Reject passwords that do not meet the existing minimum length requirement
+    if (cleanPassword.length < 8) {
+      setFormError('Password must be at least 8 characters in length.');
       return;
     }
 
@@ -90,7 +140,7 @@ export const AccountManagement = () => {
       await addAccount({
         name: cleanName,
         email: cleanEmail,
-        password: formData.password.trim(),
+        password: cleanPassword,
         role: formData.role,
         status: formData.status
       });
@@ -599,6 +649,7 @@ export const AccountManagement = () => {
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-white border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark"
                         placeholder="Juan Dela Cruz"
+                        maxLength={50}
                         required
                         autoFocus
                       />

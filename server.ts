@@ -805,6 +805,22 @@ async function startServer() {
         return res.status(400).json({ error: 'Name, email, and password are required.' });
       }
 
+      // 1. Full Name: Reject numbers or names made entirely of symbols
+      const nameCheck = validateFullName(name);
+      if (!nameCheck.isValid) {
+        return res.status(400).json({ error: nameCheck.error });
+      }
+
+      // 2. Email: Reject invalid email addresses such as "1@1"
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ error: 'Please enter a valid email address.' });
+      }
+
+      // 3. Password: Reject passwords that do not meet the minimum length requirement
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters in length.' });
+      }
+
       const { isConnected } = await getDbStatus();
       const now = new Date();
       const newUserId = `usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
