@@ -136,6 +136,34 @@ const LoginPage = () => {
     return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/i.test(email.trim());
   };
 
+  // Full Name Validator:
+  // - Required, max 50 characters
+  // - Rejects numbers
+  // - Rejects names made entirely of symbols
+  // - Allows valid names containing letters, spaces, hyphens, and apostrophes
+  const validateFullName = (name: unknown): { isValid: boolean; error?: string } => {
+    if (typeof name !== 'string') {
+      return { isValid: false, error: 'Full Name is required.' };
+    }
+    const cleanName = name.trim();
+    if (!cleanName) {
+      return { isValid: false, error: 'Full Name is required.' };
+    }
+    if (cleanName.length > 50) {
+      return { isValid: false, error: 'Full Name cannot exceed 50 characters.' };
+    }
+    if (/[0-9]/.test(cleanName)) {
+      return { isValid: false, error: 'Full Name must not contain numbers.' };
+    }
+    if (!/[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]/.test(cleanName)) {
+      return { isValid: false, error: 'Full Name cannot be made entirely of symbols.' };
+    }
+    if (!/^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\s'-]+$/.test(cleanName)) {
+      return { isValid: false, error: 'Full Name can only contain letters, spaces, hyphens, and apostrophes.' };
+    }
+    return { isValid: true };
+  };
+
   // Password Rules Validation (Sign Up):
   // 1. Total length exactly 8 characters
   // 2. Contains at least 1 uppercase letter
@@ -361,22 +389,13 @@ const LoginPage = () => {
     setError('');
     setInfoMsg('');
 
+    const nameCheck = validateFullName(signUpName);
+    if (!nameCheck.isValid) {
+      setError(nameCheck.error || 'Invalid Full Name.');
+      return;
+    }
+
     const cleanName = signUpName.trim();
-    if (!cleanName) {
-      setError('Full Name is required.');
-      return;
-    }
-
-    if (cleanName.length > 50) {
-      setError('Full Name cannot exceed 50 characters.');
-      return;
-    }
-
-    if (/[0-9]/.test(cleanName)) {
-      setError('Full Name must not contain numbers.');
-      return;
-    }
-
     const cleanEmail = signUpEmail.trim().toLowerCase();
     if (!cleanEmail) {
       setError('Please enter your email address.');
@@ -395,7 +414,7 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const res = await sendSignUpCode(cleanEmail);
+      const res = await sendSignUpCode(cleanEmail, cleanName);
       setSignUpStep(2);
       setResendCooldown(60);
       setInfoMsg(res.message || `A 6-digit verification code has been sent to your email (${cleanEmail}). Please check your inbox.`);
@@ -471,6 +490,12 @@ const LoginPage = () => {
     e.preventDefault();
     setError('');
     setInfoMsg('');
+
+    const nameCheck = validateFullName(signUpName);
+    if (!nameCheck.isValid) {
+      setError(nameCheck.error || 'Invalid Full Name.');
+      return;
+    }
 
     if (!isPasswordFullyValid) {
       setError('Password must have 1 capital letter, a number, and exactly 8 characters total.');
@@ -757,7 +782,10 @@ const LoginPage = () => {
                         id="signup-name-input"
                         value={signUpName}
                         maxLength={50}
-                        onChange={(e) => setSignUpName(e.target.value.replace(/[0-9]/g, '').slice(0, 50))}
+                        onChange={(e) => {
+                          setSignUpName(e.target.value.slice(0, 50));
+                          if (error) setError('');
+                        }}
                         placeholder="e.g. Juan Dela Cruz"
                         className="w-full bg-white border border-gray-300 p-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                         required

@@ -158,7 +158,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user, logout]);
 
   // Request 6-digit verification code to Gmail
-  const sendSignUpCode = useCallback(async (email: string) => {
+  const sendSignUpCode = useCallback(async (email: string, name?: string) => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Client-side quick check against existing registered accounts
@@ -173,7 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const res = await fetch('/api/auth/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, purpose: 'signup' }),
+        body: JSON.stringify({ email: cleanEmail, name: name ? name.trim() : undefined, purpose: 'signup' }),
       });
       const data = await res.json();
       if (!res.ok) {

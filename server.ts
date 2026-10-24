@@ -42,6 +42,30 @@ function validatePassword(password: string): { isValid: boolean; error?: string 
   return { isValid: true };
 }
 
+// Full Name format validator: letters, spaces, hyphens, and apostrophes; no numbers; not entirely symbols
+function validateFullName(name: unknown): { isValid: boolean; error?: string } {
+  if (typeof name !== 'string') {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  const cleanName = name.trim();
+  if (!cleanName) {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  if (cleanName.length > 50) {
+    return { isValid: false, error: 'Full Name cannot exceed 50 characters.' };
+  }
+  if (/[0-9]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name must not contain numbers.' };
+  }
+  if (!/[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name cannot be made entirely of symbols.' };
+  }
+  if (!/^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\s'-]+$/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name can only contain letters, spaces, hyphens, and apostrophes.' };
+  }
+  return { isValid: true };
+}
+
 // Password Hashing: Secure salted scrypt hash
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -149,6 +173,14 @@ async function startServer() {
 
       if (!isValidEmail(email)) {
         return res.status(400).json({ error: 'Requires a valid email address.' });
+      }
+
+      // If name is provided for signup, validate it before issuing verification code
+      if (purpose === 'signup' && req.body.name !== undefined) {
+        const nameCheck = validateFullName(req.body.name);
+        if (!nameCheck.isValid) {
+          return res.status(400).json({ error: nameCheck.error });
+        }
       }
 
       const { isConnected } = await getDbStatus();
@@ -277,21 +309,12 @@ async function startServer() {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
       const password = sanitizeString(req.body.password, 64);
-      const rawName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
-
-      if (!rawName) {
-        return res.status(400).json({ error: 'Full Name is a required field.' });
+      const nameCheck = validateFullName(req.body.name);
+      if (!nameCheck.isValid) {
+        return res.status(400).json({ error: nameCheck.error });
       }
 
-      if (rawName.length > 50) {
-        return res.status(400).json({ error: 'Full Name cannot exceed 50 characters.' });
-      }
-
-      if (/[0-9]/.test(rawName)) {
-        return res.status(400).json({ error: 'Full Name must not contain numbers.' });
-      }
-
-      const name = sanitizeString(rawName, 50);
+      const name = sanitizeString(typeof req.body.name === 'string' ? req.body.name.trim() : '', 50);
 
       if (!email || !isValidEmail(email)) {
         return res.status(400).json({ error: 'A valid email address is required.' });
