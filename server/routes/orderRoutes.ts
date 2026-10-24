@@ -35,6 +35,34 @@ function normalizeOrderEmail(order: any): any {
   };
 }
 
+// Full Name Validator:
+// - Required, max 50 characters
+// - Rejects numbers
+// - Rejects names made entirely of symbols
+// - Allows valid names containing letters, spaces, hyphens, and apostrophes
+function validateFullName(name: unknown): { isValid: boolean; error?: string } {
+  if (typeof name !== 'string') {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  const cleanName = name.trim();
+  if (!cleanName) {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  if (cleanName.length > 50) {
+    return { isValid: false, error: 'Full Name cannot exceed 50 characters.' };
+  }
+  if (/[0-9]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name must not contain numbers.' };
+  }
+  if (!/[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name cannot be made entirely of symbols.' };
+  }
+  if (!/^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\s'-]+$/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name can only contain letters, spaces, hyphens, and apostrophes.' };
+  }
+  return { isValid: true };
+}
+
 // Helper to look up an InventoryItem document supporting both custom string 'id' and MongoDB '_id'
 export async function findInventoryItemDoc(invId: string | undefined | null, session?: any) {
   if (!invId) return null;
@@ -578,15 +606,10 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 
     // Strict validation for Online / Customer orders (POS orders bypass this to support walk-in flexibility)
     if (finalOrderType !== 'POS') {
-      const rawName = (customer?.name || userName || '').trim();
-      if (!rawName) {
-        return res.status(400).json({ error: 'Customer Full Name is required.' });
-      }
-      if (rawName.length > 50) {
-        return res.status(400).json({ error: 'Customer Full Name cannot exceed 50 characters.' });
-      }
-      if (/[0-9]/.test(rawName)) {
-        return res.status(400).json({ error: 'Customer Full Name must not contain numbers.' });
+      const rawName = customer?.name || userName || '';
+      const nameCheck = validateFullName(rawName);
+      if (!nameCheck.isValid) {
+        return res.status(400).json({ error: nameCheck.error });
       }
 
       const rawPhone = (customer?.phone || '').trim();
@@ -595,6 +618,9 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       }
       if (!/^\d{11}$/.test(rawPhone)) {
         return res.status(400).json({ error: 'Customer Phone Number must contain exactly 11 digits.' });
+      }
+      if (!rawPhone.startsWith('09')) {
+        return res.status(400).json({ error: 'Customer Phone Number must be a valid Philippine mobile number starting with 09 (e.g. 09123456789).' });
       }
     }
 

@@ -6,12 +6,40 @@ import { AuthContext } from '../context/AuthContext';
 import { RefreshCw } from 'lucide-react';
 import { formatPrice } from '../utils/format';
 
+// Full Name Validator:
+// - Required, max 50 characters
+// - Rejects numbers
+// - Rejects names made entirely of symbols
+// - Allows valid names containing letters, spaces, hyphens, and apostrophes
+export const validateFullName = (name: unknown): { isValid: boolean; error?: string } => {
+  if (typeof name !== 'string') {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  const cleanName = name.trim();
+  if (!cleanName) {
+    return { isValid: false, error: 'Full Name is required.' };
+  }
+  if (cleanName.length > 50) {
+    return { isValid: false, error: 'Full Name cannot exceed 50 characters.' };
+  }
+  if (/[0-9]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name must not contain numbers.' };
+  }
+  if (!/[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name cannot be made entirely of symbols.' };
+  }
+  if (!/^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\s'-]+$/.test(cleanName)) {
+    return { isValid: false, error: 'Full Name can only contain letters, spaces, hyphens, and apostrophes.' };
+  }
+  return { isValid: true };
+};
+
 const Checkout = () => {
   const { cart, getCartTotal, clearCart } = useContext(CartContext) as any;
   const { user } = useContext(AuthContext) as any;
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ 
-    name: (user?.name || '').replace(/[0-9]/g, '').slice(0, 50), 
+    name: user?.name ? String(user.name).slice(0, 50) : '', 
     phone: '',
     paymentMethod: 'GCash'
   });
@@ -22,16 +50,13 @@ const Checkout = () => {
     if (user?.name && !formData.name) {
       setFormData(prev => ({ 
         ...prev, 
-        name: user.name.replace(/[0-9]/g, '').slice(0, 50) 
+        name: String(user.name).slice(0, 50) 
       }));
     }
   }, [user]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Numbers 0–9 must not be accepted when typing or pasting. Max 50 chars.
-    // Preserves letters, spaces, hyphens, apostrophes, and periods.
-    const filteredName = e.target.value.replace(/[0-9]/g, '').slice(0, 50);
-    setFormData(prev => ({ ...prev, name: filteredName }));
+    setFormData(prev => ({ ...prev, name: e.target.value.slice(0, 50) }));
     if (formError) setFormError('');
   };
 
@@ -48,19 +73,12 @@ const Checkout = () => {
     if (cart.length === 0) return alert("Your cart is empty!");
     if (isSubmitting) return;
 
+    const nameValidation = validateFullName(formData.name);
+    if (!nameValidation.isValid) {
+      setFormError(nameValidation.error || 'Invalid Full Name.');
+      return;
+    }
     const cleanName = formData.name.trim();
-    if (!cleanName) {
-      setFormError('Full Name is required.');
-      return;
-    }
-    if (cleanName.length > 50) {
-      setFormError('Full Name cannot exceed 50 characters.');
-      return;
-    }
-    if (/[0-9]/.test(cleanName)) {
-      setFormError('Full Name must not contain numbers.');
-      return;
-    }
 
     const cleanPhone = formData.phone.trim();
     if (!cleanPhone) {

@@ -158,8 +158,9 @@ export async function createOrder(orderData: any): Promise<any> {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to place order');
+      const err = await res.json().catch(() => ({}));
+      ordersCache = ordersCache.filter(o => o.id !== tempId);
+      throw new Error(err.error || err.message || 'Failed to place order');
     }
 
     const savedOrder = await res.json();
@@ -168,7 +169,8 @@ export async function createOrder(orderData: any): Promise<any> {
     return savedOrder;
   } catch (error) {
     console.error('Error saving order to MongoDB:', error);
-    return optimisticOrder;
+    ordersCache = ordersCache.filter(o => o.id !== tempId);
+    throw error;
   }
 }
 
