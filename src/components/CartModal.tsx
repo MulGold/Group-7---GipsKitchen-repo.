@@ -70,10 +70,13 @@ const CartModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
                     <p className="text-gray-400 text-xs mt-1">Add some delicious items from our menu!</p>
                   </div>
                   <button 
-                    onClick={onClose}
+                    onClick={() => {
+                      onClose();
+                      navigate('/menu');
+                    }}
                     className="text-xs font-bold text-primary hover:underline pt-2"
                   >
-                    Continue Shopping
+                    Continue to Menu
                   </button>
                 </div>
               ) : (
