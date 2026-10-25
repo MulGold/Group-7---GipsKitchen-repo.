@@ -1,13 +1,26 @@
 import { Router, Request, Response } from 'express';
 import { Product } from '../models/Product';
 import { getDbStatus, memoryStore } from '../db';
+import { verifySessionToken } from '../auth';
 
 const router = Router();
 
 // Helper to check if request is from Admin or Staff
 function isAuthorizedStaffOrAdmin(req: Request): boolean {
   const role = (req.headers['x-user-role'] as string || '').toLowerCase();
-  return role === 'admin' || role === 'staff';
+  if (role === 'admin' || role === 'staff') return true;
+
+  const authHeader = req.headers['authorization'];
+  if (authHeader && typeof authHeader === 'string') {
+    const parts = authHeader.trim().split(' ');
+    if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+      const user = verifySessionToken(parts[1]);
+      if (user && (user.role === 'admin' || user.role === 'staff')) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // 1. GET /api/products - List products
@@ -259,40 +272,57 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// 5. DELETE /api/products/:id - Delete product (Admin/Staff only)
-router.delete('/:id', async (req: Request, res: Response) => {
+// Helper function to delete a product
+async function executeDeleteProduct(rawId: string | number | undefined, req: Request, res: Response) {
   try {
     if (!isAuthorizedStaffOrAdmin(req)) {
       return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
     }
 
-    const rawId = req.params.id;
-    const numericId = Number(rawId);
+    if (rawId === undefined || rawId === null || String(rawId).trim() === '') {
+      return res.status(400).json({ error: 'Product ID is required for deletion' });
+    }
+
+    const cleanId = String(rawId).trim();
+    const numericId = Number(cleanId);
     const { isConnected } = await getDbStatus();
 
     if (isConnected) {
       let query: any = { id: numericId };
       if (isNaN(numericId)) {
-        query = { _id: rawId };
+        query = { _id: cleanId };
       }
 
       const deleted = await Product.findOneAndDelete(query).lean();
       if (!deleted) {
-        return res.status(404).json({ error: `Product with ID ${rawId} not found` });
+        return res.status(404).json({ error: `Product with ID ${cleanId} not found` });
       }
-      return res.json({ success: true, message: 'Product deleted successfully', id: rawId });
+      return res.json({ success: true, message: 'Product deleted successfully', id: cleanId });
     } else {
-      const idx = memoryStore.products.findIndex(p => p.id === numericId || p.id === rawId || p._id === rawId);
+      const idx = memoryStore.products.findIndex(p => p.id === numericId || String(p.id) === cleanId || String(p._id) === cleanId);
       if (idx === -1) {
-        return res.status(404).json({ error: `Product with ID ${rawId} not found` });
+        return res.status(404).json({ error: `Product with ID ${cleanId} not found` });
       }
       memoryStore.products.splice(idx, 1);
-      return res.json({ success: true, message: 'Product deleted successfully', id: rawId });
+      return res.json({ success: true, message: 'Product deleted successfully', id: cleanId });
     }
   } catch (error: any) {
     console.error('Error deleting product:', error);
     res.status(500).json({ error: error.message || 'Failed to delete product in database' });
   }
+}
+
+// 5. DELETE /api/products/:id - Delete product (Admin/Staff only)
+router.delete('/:id', async (req: Request, res: Response) => {
+  const paramId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  return executeDeleteProduct(paramId, req, res);
+});
+
+// 6. DELETE /api/products - Delete product via query (?id=...) or body ({ id: ... })
+router.delete('/', async (req: Request, res: Response) => {
+  const rawId = req.query.id !== undefined ? req.query.id : req.body?.id;
+  const singleId = Array.isArray(rawId) ? rawId[0] : rawId;
+  return executeDeleteProduct(singleId as any, req, res);
 });
 
 export default router;

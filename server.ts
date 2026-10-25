@@ -980,11 +980,11 @@ async function startServer() {
     }
   });
 
-  // 7. Products REST API
-  app.use('/api/products', productRoutes);
+  // 7. Products REST API (supports plural, singular, and menu aliases)
+  app.use(['/api/products', '/api/product', '/api/menu', '/api/menu-items'], productRoutes);
 
-  // 8. Categories REST API
-  app.use('/api/categories', categoryRoutes);
+  // 8. Categories REST API (supports plural and singular aliases)
+  app.use(['/api/categories', '/api/category'], categoryRoutes);
 
   // 9. Inventory REST API
   app.use('/api/inventory', inventoryRoutes);
@@ -995,6 +995,17 @@ async function startServer() {
 
   // 11. Notifications REST API
   app.use('/api/notifications', notificationRoutes);
+
+  // 12. Catch-all JSON 404 for any unhandled /api/* routes (strictly prevents falling through to Vite SPA index.html)
+  app.use('/api', (req, res) => {
+    res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
+  });
+
+  // 13. API error-handling middleware ensuring all API failures respond with JSON
+  app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('[API Error]', err);
+    res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  });
 
   // Vite middleware for development vs static build in production
   if (process.env.NODE_ENV !== 'production') {

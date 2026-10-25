@@ -34,6 +34,18 @@ const ManageMenu = () => {
   const [isRemovingCategory, setIsRemovingCategory] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState('');
   const [isDeletingCat, setIsDeletingCat] = useState(false);
+
+  // User-facing feedback banner state (success / error)
+  const [feedbackBanner, setFeedbackBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (feedbackBanner?.type === 'success') {
+      const timer = setTimeout(() => {
+        setFeedbackBanner(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedbackBanner]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -76,18 +88,20 @@ const ManageMenu = () => {
 
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCategoryName.trim()) {
+    const cleanName = newCategoryName.trim();
+    if (!cleanName) {
       setCategoryMsg('Category name cannot be empty');
       return;
     }
     try {
-      await createCategory(newCategoryName.trim());
+      await createCategory(cleanName);
       const updatedCats = await fetchCategories();
       setCategories(updatedCats);
-      setFormData(prev => ({ ...prev, category: newCategoryName.trim() }));
+      setFormData(prev => ({ ...prev, category: cleanName }));
       setNewCategoryName('');
       setIsAddingCategory(false);
       setCategoryMsg('');
+      setFeedbackBanner({ type: 'success', message: `Category "${cleanName}" created successfully.` });
     } catch (err: any) {
       setCategoryMsg(err.message || 'Failed to create category');
     }
@@ -135,6 +149,10 @@ const ManageMenu = () => {
 
       setIsRemovingCategory(false);
       setCategoryToDelete('');
+      setFeedbackBanner({ 
+        type: 'success', 
+        message: `Category "${target}" removed successfully. Associated items were safely reassigned to "Uncategorized".` 
+      });
     } catch (err: any) {
       setCategoryMsg(err.message || 'Failed to remove category');
     } finally {
@@ -202,10 +220,13 @@ const ManageMenu = () => {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number | string) => {
+    const itemToDelete = products.find(p => p.id === id || String(p.id) === String(id) || String(p._id) === String(id));
+    const itemName = itemToDelete?.name ? `"${itemToDelete.name}"` : 'this menu item';
+
     const confirmed = await confirm({
       title: 'Delete Menu Item?',
-      message: 'Are you sure you want to delete this menu item?',
+      message: `Are you sure you want to delete ${itemName}? This action cannot be undone.`,
       confirmText: 'Delete',
       cancelText: 'Cancel',
       variant: 'destructive'
@@ -214,9 +235,11 @@ const ManageMenu = () => {
 
     try {
       await removeProduct(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
+      setProducts(prev => prev.filter(p => p.id !== id && String(p.id) !== String(id) && String(p._id) !== String(id)));
+      setFeedbackBanner({ type: 'success', message: `${itemName} was deleted successfully.` });
     } catch (err: any) {
-      alert(err.message || 'Failed to delete product');
+      const errorMsg = err.message || 'Failed to delete product. Please try again.';
+      setFeedbackBanner({ type: 'error', message: errorMsg });
     }
   };
 
@@ -380,6 +403,30 @@ const ManageMenu = () => {
   return (
     <div className="min-h-screen bg-white p-6">
       <div className="max-w-6xl mx-auto">
+        {/* User-friendly feedback message banner */}
+        {feedbackBanner && (
+          <div 
+            className={`mb-5 p-4 rounded-xl border flex items-center justify-between gap-3 text-xs font-bold transition-all shadow-sm ${
+              feedbackBanner.type === 'success' 
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                : 'bg-red-50 text-red-800 border-red-200'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${feedbackBanner.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              <span>{feedbackBanner.message}</span>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setFeedbackBanner(null)} 
+              className="text-gray-400 hover:text-dark p-1 rounded-md transition-colors"
+              aria-label="Dismiss message"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="hidden sm:flex flex-wrap justify-end items-center mb-6 gap-2">
           <button 
             onClick={() => { setIsAddingCategory(true); setCategoryMsg(''); }}

@@ -15,6 +15,36 @@ export const CATEGORIES = [
   "Beverages"
 ];
 
+// Helper to safely parse JSON or non-JSON responses without exposing raw syntax errors
+async function safeParseResponse(res: Response, defaultErrorMsg: string): Promise<any> {
+  let data: any = null;
+  const contentType = res.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+  } else {
+    try {
+      const text = await res.text();
+      if (text && (text.startsWith('{') || text.startsWith('['))) {
+        data = JSON.parse(text);
+      }
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!res.ok) {
+    const errorMsg = data?.error || data?.message || (res.status === 404 ? 'Requested item not found' : `${defaultErrorMsg} (Status ${res.status})`);
+    throw new Error(errorMsg);
+  }
+
+  return data;
+}
+
 // Async API: Fetch dynamic categories from server
 export const fetchCategories = async (): Promise<string[]> => {
   try {
@@ -24,7 +54,7 @@ export const fetchCategories = async (): Promise<string[]> => {
     if (!res.ok) {
       return CATEGORIES;
     }
-    const data = await res.json();
+    const data = await safeParseResponse(res, 'Failed to fetch categories');
     return Array.isArray(data) && data.length > 0 ? data : CATEGORIES;
   } catch (err) {
     console.error('Error fetching categories:', err);
@@ -34,29 +64,33 @@ export const fetchCategories = async (): Promise<string[]> => {
 
 // Async API: Create new category (Admin/Staff)
 export const createCategory = async (name: string): Promise<any> => {
+  const cleanName = typeof name === 'string' ? name.trim() : '';
+  if (!cleanName) {
+    throw new Error('Category name cannot be empty');
+  }
+
   const res = await fetch('/api/categories', {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ name: name.trim() })
+    body: JSON.stringify({ name: cleanName })
   });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to create category');
-  }
-  return data;
+
+  return await safeParseResponse(res, 'Failed to create category');
 };
 
 // Async API: Delete category (Admin/Staff)
 export const deleteCategory = async (name: string): Promise<any> => {
-  const res = await fetch(`/api/categories/${encodeURIComponent(name.trim())}`, {
+  const cleanName = typeof name === 'string' ? name.trim() : '';
+  if (!cleanName) {
+    throw new Error('Category name is required');
+  }
+
+  const res = await fetch(`/api/categories/${encodeURIComponent(cleanName)}`, {
     method: 'DELETE',
     headers: getAuthHeaders()
   });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to delete category');
-  }
-  return data;
+
+  return await safeParseResponse(res, 'Failed to delete category');
 };
 
 // Helper to calculate available whole menu servings from linked inventory and deduction quantities
@@ -109,20 +143,29 @@ export const calculateAvailableServings = (product: any, inventoryList: any[]): 
 
 // Helper to get authorization headers from current session
 export const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  const token = localStorage.getItem('capstone_auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
-    const savedUser = localStorage.getItem('capstone_user');
-    if (savedUser) {
-      const parsed = JSON.parse(savedUser);
-      return {
-        'Content-Type': 'application/json',
-        'x-user-role': parsed.role || 'customer',
-        'x-user-email': parsed.email || ''
-      };
+    const userStr = localStorage.getItem('capstone_user') || 
+                    localStorage.getItem('gips_user') || 
+                    localStorage.getItem('currentUser') || 
+                    localStorage.getItem('user');
+    if (userStr) {
+      const parsed = JSON.parse(userStr);
+      if (parsed.role) headers['x-user-role'] = parsed.role;
+      if (parsed.email) headers['x-user-email'] = parsed.email;
     }
   } catch (err) {
     console.error('Error reading auth headers:', err);
   }
-  return { 'Content-Type': 'application/json' };
+  return headers;
 };
 
 // In-memory runtime cache with 10-second TTL
@@ -295,10 +338,7 @@ export const createProduct = async (newProduct: any): Promise<any> => {
     body: JSON.stringify(payload)
   });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to create product');
-  }
+  const data = await safeParseResponse(res, 'Failed to create product');
 
   const created = data.product || data;
   cachedProducts.push(created);
@@ -321,19 +361,17 @@ export const editProduct = async (id: number | string, updatedData: any): Promis
     payload.ingredients = Array.isArray(updatedData.ingredients) ? updatedData.ingredients : [];
   }
 
-  const res = await fetch(`/api/products/${id}`, {
+  const cleanId = String(id).trim();
+  const res = await fetch(`/api/products/${encodeURIComponent(cleanId)}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
     body: JSON.stringify(payload)
   });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to update product');
-  }
+  const data = await safeParseResponse(res, 'Failed to update product');
 
   const updated = data.product || data;
-  cachedProducts = cachedProducts.map(p => (p.id === Number(id) || p.id === id ? updated : p));
+  cachedProducts = cachedProducts.map(p => (p.id === Number(id) || String(p.id) === cleanId || String(p._id) === cleanId ? updated : p));
   cacheTimestamp = Date.now();
   isCacheLoaded = true;
   return updated;
@@ -341,17 +379,19 @@ export const editProduct = async (id: number | string, updatedData: any): Promis
 
 // Async API: Delete product in MongoDB Atlas
 export const removeProduct = async (id: number | string): Promise<any> => {
-  const res = await fetch(`/api/products/${id}`, {
+  if (id === undefined || id === null || String(id).trim() === '') {
+    throw new Error('Product ID is required for deletion');
+  }
+
+  const cleanId = String(id).trim();
+  const res = await fetch(`/api/products/${encodeURIComponent(cleanId)}`, {
     method: 'DELETE',
     headers: getAuthHeaders()
   });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to delete product');
-  }
+  const data = await safeParseResponse(res, 'Failed to delete product');
 
-  cachedProducts = cachedProducts.filter(p => p.id !== Number(id) && p.id !== id);
+  cachedProducts = cachedProducts.filter(p => p.id !== Number(cleanId) && String(p.id) !== cleanId && String(p._id) !== cleanId);
   cacheTimestamp = Date.now();
   return data;
 };
