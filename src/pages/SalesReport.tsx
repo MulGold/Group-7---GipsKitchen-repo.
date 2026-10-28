@@ -374,28 +374,38 @@ const SalesReport = () => {
     const completedOrders = orders.filter(o => o.status === 'Completed');
 
     if (filterType === 'day') {
-      // 7-day trend leading up to and including selectedDate (matching reference design)
+      // 24 hourly intervals for the selected day (00:00 to 23:00)
       const points = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(selectedDate);
-        d.setDate(selectedDate.getDate() - i);
-        d.setHours(0, 0, 0, 0);
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      const date = selectedDate.getDate();
+      const now = new Date();
+      const isToday = selectedDate.toDateString() === now.toDateString();
+      const currentHour = now.getHours();
 
-        const nextD = new Date(d);
-        nextD.setDate(d.getDate() + 1);
+      for (let h = 0; h < 24; h++) {
+        const startOfHour = new Date(year, month, date, h, 0, 0, 0);
+        const endOfHour = new Date(year, month, date, h + 1, 0, 0, 0);
 
-        const daySales = completedOrders
+        const hourSales = completedOrders
           .filter(order => {
             const orderDate = new Date(order.date || order.createdAt);
-            return orderDate >= d && orderDate < nextD;
+            return orderDate >= startOfHour && orderDate < endOfHour;
           })
           .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
+        const hourLabel = startOfHour.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          hour12: true
+        });
+
         points.push({
-          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          fullDateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          revenue: daySales,
-          isSelected: i === 0
+          label: hourLabel,
+          fullDateLabel: `${startOfHour.toLocaleDateString('en-US', { 
+            weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' 
+          })}, ${hourLabel}`,
+          revenue: hourSales,
+          isSelected: isToday && h === currentHour
         });
       }
       return points;
