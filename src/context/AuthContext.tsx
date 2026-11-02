@@ -5,6 +5,18 @@ export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
 export const AuthContext = createContext<any>(null);
 
+// Helper to get authorization headers with Bearer token for user management
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  const token = localStorage.getItem('capstone_auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('capstone_user');
@@ -68,11 +80,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Fetch users from server API with fallbacks
+  // Fetch users from server API with fallbacks (Strictly Admin only)
   const fetchUsers = useCallback(async () => {
+    const token = localStorage.getItem('capstone_auth_token');
+    if (!token) return accounts;
+
     setLoadingUsers(true);
     try {
-      const res = await fetch('/api/auth/users');
+      const res = await fetch('/api/auth/users', {
+        headers: getAuthHeaders()
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -89,10 +106,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return accounts;
   }, [accounts]);
 
-  // Initial fetch on mount if admin
+  // Initial fetch only after authentication is confirmed and user role is verified as 'admin'
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (user && user.role === 'admin') {
+      fetchUsers();
+    }
+  }, [user?.role, user?.id]);
 
   useEffect(() => {
     if (user) {
@@ -432,7 +451,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const res = await fetch('/api/auth/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(newAcc)
       });
       if (!res.ok) {
@@ -467,17 +486,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const res = await fetch(`/api/auth/users/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updatedData)
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          setAccounts(prev => prev.map(acc => (acc.id === id || acc._id === id) ? { ...acc, ...data.user } : acc));
-          return data.user;
-        }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update user account.');
       }
-    } catch (err) {
+      const data = await res.json();
+      if (data.user) {
+        setAccounts(prev => prev.map(acc => (acc.id === id || acc._id === id) ? { ...acc, ...data.user } : acc));
+        return data.user;
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.toLowerCase().includes('failed to fetch')) {
+        throw err;
+      }
       console.warn('API error updating user, updating locally:', err);
     }
     setAccounts(prev => prev.map(acc => (acc.id === id || acc._id === id) ? { ...acc, ...updatedData } : acc));

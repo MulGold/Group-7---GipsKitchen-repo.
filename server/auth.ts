@@ -183,3 +183,18 @@ export function requireAdminOrStaff(req: Request, res: Response, next: NextFunct
   }
   next();
 }
+
+/**
+ * Middleware requiring strict administrator privileges from verified token.
+ */
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Access denied: Authentication required.' });
+  }
+  const role = req.user.role;
+  if (role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied: Administrator privileges required.' });
+  }
+  next();
+}
+

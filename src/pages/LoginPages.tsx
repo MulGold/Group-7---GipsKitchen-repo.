@@ -165,31 +165,31 @@ const LoginPage = () => {
   };
 
   // Password Rules Validation (Sign Up):
-  // 1. Total length exactly 8 characters
+  // 1. Total length at least 8 characters
   // 2. Contains at least 1 uppercase letter
   // 3. Contains at least 1 number
   const passwordRules = {
-    exactEightChars: signUpPassword.length === 8,
+    minEightChars: signUpPassword.length >= 8,
     hasUppercase: /[A-Z]/.test(signUpPassword),
     hasNumber: /[0-9]/.test(signUpPassword),
     passwordsMatch: signUpPassword.length > 0 && signUpPassword === confirmPassword
   };
 
   const isPasswordFullyValid = 
-    passwordRules.exactEightChars && 
+    passwordRules.minEightChars && 
     passwordRules.hasUppercase && 
     passwordRules.hasNumber;
 
   // Password Rules Validation (Password Reset):
   const resetPasswordRules = {
-    exactEightChars: newPassword.length === 8,
+    minEightChars: newPassword.length >= 8,
     hasUppercase: /[A-Z]/.test(newPassword),
     hasNumber: /[0-9]/.test(newPassword),
     passwordsMatch: newPassword.length > 0 && newPassword === confirmNewPassword
   };
 
   const isResetPasswordFullyValid = 
-    resetPasswordRules.exactEightChars && 
+    resetPasswordRules.minEightChars && 
     resetPasswordRules.hasUppercase && 
     resetPasswordRules.hasNumber;
 
@@ -310,7 +310,7 @@ const LoginPage = () => {
     setInfoMsg('');
 
     if (!isResetPasswordFullyValid) {
-      setError('Password must have 1 capital letter, a number, and exactly 8 characters total.');
+      setError('Password must contain at least 8 characters, 1 uppercase letter, and 1 number.');
       return;
     }
 
@@ -498,7 +498,7 @@ const LoginPage = () => {
     }
 
     if (!isPasswordFullyValid) {
-      setError('Password must have 1 capital letter, a number, and exactly 8 characters total.');
+      setError('Password must contain at least 8 characters, 1 uppercase letter, and 1 number.');
       return;
     }
 
@@ -939,21 +939,20 @@ const LoginPage = () => {
                       <KeyRound size={18} />
                     </div>
                     <h3 className="text-xl font-black text-dark tracking-tight">Create Password</h3>
-                    <p className="text-gray-500 text-xs mt-0.5">Set a secure 8-character password for {signUpEmail}</p>
+                    <p className="text-gray-500 text-xs mt-0.5">Set a secure password (minimum 8 characters) for {signUpEmail}</p>
                   </div>
 
                   <form onSubmit={handleCompleteSignUp} className="space-y-4">
                     {/* Password Input */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        New Password (8 characters)
+                        New Password (minimum 8 characters)
                       </label>
                       <div className="relative group">
                         <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
                         <input 
                           type={showSignUpPassword ? 'text' : 'password'}
                           id="signup-password-input"
-                          maxLength={8}
                           value={signUpPassword}
                           onChange={(e) => setSignUpPassword(e.target.value)}
                           placeholder="e.g. Pass1234"
@@ -982,10 +981,9 @@ const LoginPage = () => {
                         <input 
                           type={showSignUpPassword ? 'text' : 'password'}
                           id="signup-confirmpassword-input"
-                          maxLength={8}
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Re-enter 8-character password"
+                          placeholder="Re-enter password"
                           className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                           required
                         />
@@ -996,9 +994,9 @@ const LoginPage = () => {
                     <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-1.5">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Password Requirements:</p>
                       <div className="space-y-1 text-xs font-medium">
-                        <div className={`flex items-center gap-2 ${passwordRules.exactEightChars ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
-                          {passwordRules.exactEightChars ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
-                          <span>Exactly 8 characters total ({signUpPassword.length}/8)</span>
+                        <div className={`flex items-center gap-2 ${passwordRules.minEightChars ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {passwordRules.minEightChars ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
+                          <span>At least 8 characters</span>
                         </div>
                         <div className={`flex items-center gap-2 ${passwordRules.hasUppercase ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
                           {passwordRules.hasUppercase ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
@@ -1255,21 +1253,20 @@ const LoginPage = () => {
                 <div>
                   <div className="text-center mb-6">
                     <h3 className="text-xl font-black text-dark tracking-tight">Create New Password</h3>
-                    <p className="text-gray-500 text-xs mt-1">Set a secure 8-character password for {forgotEmail}</p>
+                    <p className="text-gray-500 text-xs mt-1">Set a secure password (minimum 8 characters) for {forgotEmail}</p>
                   </div>
 
                   <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
                     {/* Create New Password */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Create New Password (8 characters)
+                        Create New Password (minimum 8 characters)
                       </label>
                       <div className="relative group">
                         <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
                         <input 
                           type={showNewPassword ? 'text' : 'password'}
                           id="reset-newpassword-input"
-                          maxLength={8}
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
                           placeholder="e.g. Pass1234"
@@ -1298,10 +1295,9 @@ const LoginPage = () => {
                         <input 
                           type={showNewPassword ? 'text' : 'password'}
                           id="reset-confirmpassword-input"
-                          maxLength={8}
                           value={confirmNewPassword}
                           onChange={(e) => setConfirmNewPassword(e.target.value)}
-                          placeholder="Re-enter 8-character password"
+                          placeholder="Re-enter password"
                           className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                           required
                         />
@@ -1312,9 +1308,9 @@ const LoginPage = () => {
                     <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-1.5">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Password Requirements:</p>
                       <div className="space-y-1 text-xs font-medium">
-                        <div className={`flex items-center gap-2 ${resetPasswordRules.exactEightChars ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
-                          {resetPasswordRules.exactEightChars ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
-                          <span>Exactly 8 characters total ({newPassword.length}/8)</span>
+                        <div className={`flex items-center gap-2 ${resetPasswordRules.minEightChars ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {resetPasswordRules.minEightChars ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
+                          <span>At least 8 characters</span>
                         </div>
                         <div className={`flex items-center gap-2 ${resetPasswordRules.hasUppercase ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
                           {resetPasswordRules.hasUppercase ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}

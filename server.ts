@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { connectMongoose, getDbStatus, memoryStore, mongoose } from './server/db';
 import { User, VerificationCode, Order } from './server/models';
 import { sendVerificationEmail } from './server/email';
-import { createSessionToken } from './server/auth';
+import { createSessionToken, authenticateToken, requireAdmin } from './server/auth';
 import productRoutes from './server/routes/productRoutes';
 import inventoryRoutes from './server/routes/inventoryRoutes';
 import orderRoutes from './server/routes/orderRoutes';
@@ -25,13 +25,13 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
-// Password rules: Exactly 8 characters total, with at least 1 uppercase letter and 1 number
+// Password rules: Minimum 8 characters, with at least 1 uppercase letter and 1 number
 function validatePassword(password: string): { isValid: boolean; error?: string } {
   if (typeof password !== 'string') {
     return { isValid: false, error: 'Password must be provided as text.' };
   }
-  if (password.length !== 8) {
-    return { isValid: false, error: 'Password must be exactly 8 characters in length.' };
+  if (password.length < 8) {
+    return { isValid: false, error: 'Password must be at least 8 characters in length.' };
   }
   if (!/[A-Z]/.test(password)) {
     return { isValid: false, error: 'Password must contain at least 1 capital/uppercase letter.' };
@@ -308,7 +308,7 @@ async function startServer() {
   app.post('/api/auth/signup', async (req, res) => {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
-      const password = sanitizeString(req.body.password, 64);
+      const password = sanitizeString(req.body.password);
       const nameCheck = validateFullName(req.body.name);
       if (!nameCheck.isValid) {
         return res.status(400).json({ error: nameCheck.error });
@@ -633,7 +633,7 @@ async function startServer() {
   app.post('/api/auth/reset-password', async (req, res) => {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
-      const password = sanitizeString(req.body.password, 64);
+      const password = sanitizeString(req.body.password);
 
       if (!email || !isValidEmail(email)) {
         return res.status(400).json({ error: 'A valid email address is required.' });
@@ -730,7 +730,7 @@ async function startServer() {
   });
 
   // 6. User Management (Admin only) - Fetch all registered accounts with orders count & activity history
-  app.get('/api/auth/users', async (req, res) => {
+  app.get('/api/auth/users', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const { isConnected } = await getDbStatus();
 
@@ -793,11 +793,11 @@ async function startServer() {
   });
 
   // Create Staff/Admin user account directly by Administrator
-  app.post('/api/auth/users', async (req, res) => {
+  app.post('/api/auth/users', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const name = sanitizeString(req.body.name, 100);
       const email = sanitizeString(req.body.email).toLowerCase();
-      const password = sanitizeString(req.body.password, 64);
+      const password = sanitizeString(req.body.password);
       const role = ['admin', 'staff', 'customer'].includes(req.body.role) ? req.body.role : 'staff';
       const status = ['Active', 'Suspended'].includes(req.body.status) ? req.body.status : 'Active';
 
@@ -897,9 +897,12 @@ async function startServer() {
   });
 
   // Update User Status or Role (Preserve all historical records, no permanent delete)
-  app.patch('/api/auth/users/:id', async (req, res) => {
+  app.patch('/api/auth/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = typeof req.params.id === 'string' ? req.params.id : '';
+      if (!id) {
+        return res.status(400).json({ error: 'User ID is required.' });
+      }
       const { status, role, name } = req.body;
       const { isConnected } = await getDbStatus();
 
