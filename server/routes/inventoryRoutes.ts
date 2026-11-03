@@ -3,20 +3,16 @@ import { InventoryItem } from '../models/InventoryItem';
 import { InventoryLog } from '../models/InventoryLog';
 import { getDbStatus, memoryStore } from '../db';
 
+import { authenticateToken, requireAdminOrStaff } from '../auth';
+
 const router = Router();
 
-// Helper to check if request is from Admin or Staff
-function isAuthorizedStaffOrAdmin(req: Request): boolean {
-  const role = (req.headers['x-user-role'] as string || '').toLowerCase();
-  return role === 'admin' || role === 'staff';
-}
-
-// Helper to get performer identification from headers
+// Helper to get performer identification from verified session token
 function getPerformer(req: Request): string {
-  const email = (req.headers['x-user-email'] as string || '').trim();
-  const role = (req.headers['x-user-role'] as string || '').trim();
-  if (email) return `${email} (${role || 'staff'})`;
-  return role ? `User (${role})` : 'Staff / Admin';
+  if (req.user?.email) {
+    return `${req.user.email} (${req.user.role || 'staff'})`;
+  }
+  return req.user?.role ? `User (${req.user.role})` : 'Staff / Admin';
 }
 
 // Helper to normalize decimal quantities to 6 decimal places to prevent IEEE 754 floating-point drift
@@ -25,7 +21,7 @@ function roundDecimal(val: number): number {
 }
 
 // 1. GET /api/inventory/reorder - Get items that need reordering (quantity <= lowStockThreshold)
-router.get('/reorder', async (req: Request, res: Response) => {
+router.get('/reorder', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
     const { isConnected } = await getDbStatus();
 
@@ -48,7 +44,7 @@ router.get('/reorder', async (req: Request, res: Response) => {
 });
 
 // 2. GET /api/inventory/logs - Get inventory audit/history logs
-router.get('/logs', async (req: Request, res: Response) => {
+router.get('/logs', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
     const { inventoryId, limit = '100' } = req.query;
     const maxLimit = Math.min(Number(limit) || 100, 500);
@@ -79,7 +75,7 @@ router.get('/logs', async (req: Request, res: Response) => {
 });
 
 // 2.5. GET /api/inventory/turnover - Calculate inventory turnover for a specific period
-router.get('/turnover', async (req: Request, res: Response) => {
+router.get('/turnover', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) {
@@ -374,11 +370,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // 5. POST /api/inventory - Add new raw material/inventory item (Admin/Staff only)
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
 
     const { name, quantity, unit, stableQuantity, lowStockThreshold, id } = req.body;
 
@@ -460,11 +453,8 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // 6. PUT /api/inventory/:id - Edit inventory item (Admin/Staff only)
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
 
     const rawId = req.params.id;
     const { name, quantity, unit, stableQuantity, lowStockThreshold } = req.body;
@@ -594,11 +584,8 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // 7. PATCH /api/inventory/:id/stock - Stock-in, Stock-out, or Manual Adjustment with Logging (Admin/Staff only)
-router.patch('/:id/stock', async (req: Request, res: Response) => {
+router.patch('/:id/stock', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
 
     const rawId = req.params.id;
     const { type, amount, newQuantity, reason, orderId } = req.body;
@@ -714,11 +701,8 @@ router.patch('/:id/stock', async (req: Request, res: Response) => {
 });
 
 // 8. DELETE /api/inventory/:id - Delete inventory item (Admin/Staff only)
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
 
     const rawId = req.params.id;
     const performer = getPerformer(req);

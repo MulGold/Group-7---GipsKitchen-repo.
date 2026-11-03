@@ -1,26 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { Category, Product } from '../models';
 import { getDbStatus, memoryStore, DEFAULT_CATEGORIES } from '../db';
-import { verifySessionToken } from '../auth';
+import { authenticateToken, requireAdminOrStaff } from '../auth';
 
 const router = Router();
-
-function isAuthorizedStaffOrAdmin(req: Request): boolean {
-  const role = (req.headers['x-user-role'] as string || '').toLowerCase();
-  if (role === 'admin' || role === 'staff') return true;
-
-  const authHeader = req.headers['authorization'];
-  if (authHeader && typeof authHeader === 'string') {
-    const parts = authHeader.trim().split(' ');
-    if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
-      const user = verifySessionToken(parts[1]);
-      if (user && (user.role === 'admin' || user.role === 'staff')) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 // 1. GET /api/categories - List all categories
 router.get('/', async (req: Request, res: Response) => {
@@ -66,12 +49,8 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // 2. POST /api/categories - Create new category (Admin/Staff only)
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
-
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     if (!name) {
       return res.status(400).json({ error: 'Category name is required' });
@@ -111,10 +90,6 @@ router.post('/', async (req: Request, res: Response) => {
 // Helper function to remove a category
 async function executeRemoveCategory(rawName: string, req: Request, res: Response) {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
-
     const trimmedName = rawName.trim();
     if (!trimmedName) {
       return res.status(400).json({ error: 'Category name is required' });
@@ -176,15 +151,15 @@ async function executeRemoveCategory(rawName: string, req: Request, res: Respons
   }
 }
 
-// 3. DELETE /api/categories/:name - Remove category by route parameter
-router.delete('/:name', async (req: Request, res: Response) => {
+// 3. DELETE /api/categories/:name - Remove category by route parameter (Admin/Staff only)
+router.delete('/:name', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   const paramName = Array.isArray(req.params.name) ? req.params.name[0] : (req.params.name || '');
   const rawName = decodeURIComponent(paramName);
   return executeRemoveCategory(rawName, req, res);
 });
 
-// 4. DELETE /api/categories - Remove category by query parameter (?name=...) or request body ({ name: "..." })
-router.delete('/', async (req: Request, res: Response) => {
+// 4. DELETE /api/categories - Remove category by query parameter (?name=...) or request body ({ name: "..." }) (Admin/Staff only)
+router.delete('/', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   const rawName = (typeof req.query.name === 'string' ? req.query.name : '') || 
                   (typeof req.body?.name === 'string' ? req.body.name : '');
   return executeRemoveCategory(rawName, req, res);

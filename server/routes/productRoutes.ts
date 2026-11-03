@@ -1,33 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { Product } from '../models/Product';
 import { getDbStatus, memoryStore } from '../db';
-import { verifySessionToken } from '../auth';
+import { authenticateToken, requireAdminOrStaff } from '../auth';
 
 const router = Router();
 
-// Helper to check if request is from Admin or Staff
-function isAuthorizedStaffOrAdmin(req: Request): boolean {
-  const role = (req.headers['x-user-role'] as string || '').toLowerCase();
-  if (role === 'admin' || role === 'staff') return true;
-
-  const authHeader = req.headers['authorization'];
-  if (authHeader && typeof authHeader === 'string') {
-    const parts = authHeader.trim().split(' ');
-    if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
-      const user = verifySessionToken(parts[1]);
-      if (user && (user.role === 'admin' || user.role === 'staff')) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// 1. GET /api/products - List products
+// 1. GET /api/products - List products (Public)
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { category, search, availableOnly } = req.query;
-    const isStaff = isAuthorizedStaffOrAdmin(req);
     const { isConnected } = await getDbStatus();
 
     let filter: any = {};
@@ -101,12 +82,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // 3. POST /api/products - Create product (Admin/Staff only)
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
-
     const { name, price, category, stock, image, inventoryLinkId, inventoryLinkIds, ingredients, status, description } = req.body;
 
     // Validation
@@ -180,12 +157,8 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // 4. PUT /api/products/:id - Update product (Admin/Staff only)
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
-
     const rawId = req.params.id;
     const numericId = Number(rawId);
     const { name, price, category, stock, image, inventoryLinkId, inventoryLinkIds, ingredients, status, description } = req.body;
@@ -275,10 +248,6 @@ router.put('/:id', async (req: Request, res: Response) => {
 // Helper function to delete a product
 async function executeDeleteProduct(rawId: string | number | undefined, req: Request, res: Response) {
   try {
-    if (!isAuthorizedStaffOrAdmin(req)) {
-      return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
-    }
-
     if (rawId === undefined || rawId === null || String(rawId).trim() === '') {
       return res.status(400).json({ error: 'Product ID is required for deletion' });
     }
@@ -313,13 +282,13 @@ async function executeDeleteProduct(rawId: string | number | undefined, req: Req
 }
 
 // 5. DELETE /api/products/:id - Delete product (Admin/Staff only)
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   const paramId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   return executeDeleteProduct(paramId, req, res);
 });
 
-// 6. DELETE /api/products - Delete product via query (?id=...) or body ({ id: ... })
-router.delete('/', async (req: Request, res: Response) => {
+// 6. DELETE /api/products - Delete product via query (?id=...) or body ({ id: ... }) (Admin/Staff only)
+router.delete('/', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   const rawId = req.query.id !== undefined ? req.query.id : req.body?.id;
   const singleId = Array.isArray(rawId) ? rawId[0] : rawId;
   return executeDeleteProduct(singleId as any, req, res);
