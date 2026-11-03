@@ -417,18 +417,46 @@ export const CustomerDashboard = () => {
     }
   }, [currentAccount, user]);
 
-  // Extract Order Again products based on customer's previous order items
+  // Extract Order Again products based on customer's previous valid orders
   const orderAgainProducts = useMemo(() => {
-    if (!catalogProducts || catalogProducts.length === 0) return [];
+    if (!catalogProducts || catalogProducts.length === 0 || !customerOrders || customerOrders.length === 0) {
+      return [];
+    }
+
+    // Include only statuses that represent valid paid purchases.
+    // Exclude Cancelled, Pending (unpaid in Gips Kitchen), and any orders explicitly marked as Unpaid, Cancelled, or Refunded.
+    const VALID_PAID_STATUSES = new Set([
+      'Paid',
+      'Processing',
+      'Cooking',
+      'Ready for Pickup',
+      'Ready to Pickup',
+      'On Delivery',
+      'Completed'
+    ]);
+
+    const validOrders = customerOrders.filter((order) => {
+      if (!order || !order.status) return false;
+      if (order.status === 'Cancelled' || order.status === 'Pending') return false;
+      if (
+        order.paymentStatus &&
+        (order.paymentStatus === 'Unpaid' || order.paymentStatus === 'Cancelled' || order.paymentStatus === 'Refunded')
+      ) {
+        return false;
+      }
+      return VALID_PAID_STATUSES.has(order.status);
+    });
+
+    if (validOrders.length === 0) return [];
 
     const orderedProductIds: (string | number)[] = [];
     const seenIds = new Set<string>();
 
     // Scan customer orders in order of recency
-    for (const order of customerOrders) {
-      if (!order.items) continue;
+    for (const order of validOrders) {
+      if (!order.items || !Array.isArray(order.items)) continue;
       for (const item of order.items) {
-        const idKey = String(item.id || item.productId);
+        const idKey = String(item.id || item.productId || '');
         if (idKey && !seenIds.has(idKey)) {
           seenIds.add(idKey);
           orderedProductIds.push(item.id || item.productId);
@@ -436,17 +464,14 @@ export const CustomerDashboard = () => {
       }
     }
 
-    // Match to current live catalog
+    if (orderedProductIds.length === 0) return [];
+
+    // Match strictly to current live catalog; NEVER backfill from general menu
     const matchedFromOrders = orderedProductIds
       .map((id) => catalogProducts.find((p: any) => String(p.id) === String(id)))
       .filter(Boolean);
 
-    // If customer has fewer than 5 previously ordered products, backfill from available catalog
-    const remainingProducts = catalogProducts.filter(
-      (p: any) => !seenIds.has(String(p.id)) && p.status !== 'Unavailable' && p.status !== 'Not Available'
-    );
-
-    return [...matchedFromOrders, ...remainingProducts].slice(0, 10);
+    return matchedFromOrders.slice(0, 10);
   }, [customerOrders, catalogProducts]);
 
   // Carousel scroll controls
@@ -672,102 +697,125 @@ export const CustomerDashboard = () => {
             </div>
 
             {/* Carousel Navigation Arrows */}
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={handleScrollLeft}
-                aria-label="Scroll left"
-                className="w-8 h-8 rounded-full bg-amber-100/80 hover:bg-amber-200 text-amber-900 flex items-center justify-center transition-colors shadow-2xs active:scale-95"
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button 
-                onClick={handleScrollRight}
-                aria-label="Scroll right"
-                className="w-8 h-8 rounded-full bg-amber-100/80 hover:bg-amber-200 text-amber-900 flex items-center justify-center transition-colors shadow-2xs active:scale-95"
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
+            {orderAgainProducts.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleScrollLeft}
+                  aria-label="Scroll left"
+                  className="w-8 h-8 rounded-full bg-amber-100/80 hover:bg-amber-200 text-amber-900 flex items-center justify-center transition-colors shadow-2xs active:scale-95"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button 
+                  onClick={handleScrollRight}
+                  aria-label="Scroll right"
+                  className="w-8 h-8 rounded-full bg-amber-100/80 hover:bg-amber-200 text-amber-900 flex items-center justify-center transition-colors shadow-2xs active:scale-95"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Horizontally scrollable carousel */}
-          <div 
-            ref={carouselRef}
-            className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 scroll-smooth no-scrollbar"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {orderAgainProducts.map((product) => {
-              const isUnavailable = product.status === 'Unavailable' || product.status === 'Not Available';
-              const isOutOfStock = !isUnavailable && product.stock !== undefined && product.stock <= 0;
-              const canOrder = !isUnavailable && !isOutOfStock;
-              const isRecentlyAdded = addedItemNotice === String(product.id);
+          {orderAgainProducts.length === 0 ? (
+            <div className="py-10 px-4 text-center flex flex-col items-center justify-center bg-stone-50/60 rounded-xl sm:rounded-2xl border border-dashed border-stone-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-100/70 text-amber-800 flex items-center justify-center mb-3">
+                <ShoppingBag className="w-6 h-6 sm:w-7 sm:h-7" />
+              </div>
+              <h3 className="text-base sm:text-lg font-bold text-dark mb-1">
+                No previous orders yet
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-500 max-w-sm mb-5">
+                Dishes you order will appear here for fast reordering.
+              </p>
+              <Link
+                to="/menu"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs sm:text-sm transition-all shadow-xs active:scale-95"
+              >
+                <Utensils size={16} />
+                <span>Browse Menu</span>
+              </Link>
+            </div>
+          ) : (
+            /* Horizontally scrollable carousel */
+            <div 
+              ref={carouselRef}
+              className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 scroll-smooth no-scrollbar"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {orderAgainProducts.map((product) => {
+                const isUnavailable = product.status === 'Unavailable' || product.status === 'Not Available';
+                const isOutOfStock = !isUnavailable && product.stock !== undefined && product.stock <= 0;
+                const canOrder = !isUnavailable && !isOutOfStock;
+                const isRecentlyAdded = addedItemNotice === String(product.id);
 
-              return (
-                <div 
-                  key={product.id}
-                  className="w-48 sm:w-56 shrink-0 bg-white rounded-xl border border-stone-200/80 shadow-2xs overflow-hidden flex flex-col hover:border-amber-300 hover:shadow-xs transition-all"
-                >
-                  {/* Product Image */}
-                  <div className="h-32 sm:h-36 w-full bg-amber-50/60 overflow-hidden relative border-b border-stone-100">
-                    <img 
-                      src={product.image || IMAGES.PRODUCT_PLACEHOLDER}
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        if (e.currentTarget.src !== window.location.origin + IMAGES.PRODUCT_PLACEHOLDER) {
-                          e.currentTarget.src = IMAGES.PRODUCT_PLACEHOLDER;
-                        }
-                      }}
-                    />
-                    {!canOrder && (
-                      <div className="absolute inset-0 bg-stone-900/60 flex items-center justify-center">
-                        <span className="bg-white/95 text-dark font-extrabold text-[10px] px-2 py-0.5 rounded uppercase tracking-wider">
-                          Out of Stock
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Product Name & Price */}
-                  <div className="p-3.5 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h4 className="font-bold text-xs sm:text-sm text-dark truncate mb-1" title={product.name}>
-                        {product.name}
-                      </h4>
-                      <p className="font-extrabold text-xs sm:text-sm text-primary mb-3">
-                        {formatPrice(product.price)}
-                      </p>
+                return (
+                  <div 
+                    key={product.id}
+                    className="w-48 sm:w-56 shrink-0 bg-white rounded-xl border border-stone-200/80 shadow-2xs overflow-hidden flex flex-col hover:border-amber-300 hover:shadow-xs transition-all"
+                  >
+                    {/* Product Image */}
+                    <div className="h-32 sm:h-36 w-full bg-amber-50/60 overflow-hidden relative border-b border-stone-100">
+                      <img 
+                        src={product.image || IMAGES.PRODUCT_PLACEHOLDER}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          if (e.currentTarget.src !== window.location.origin + IMAGES.PRODUCT_PLACEHOLDER) {
+                            e.currentTarget.src = IMAGES.PRODUCT_PLACEHOLDER;
+                          }
+                        }}
+                      />
+                      {!canOrder && (
+                        <div className="absolute inset-0 bg-stone-900/60 flex items-center justify-center">
+                          <span className="bg-white/95 text-dark font-extrabold text-[10px] px-2 py-0.5 rounded uppercase tracking-wider">
+                            Out of Stock
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Add to Cart Button */}
-                    <button 
-                      onClick={() => handleAddToCart(product)}
-                      disabled={!canOrder}
-                      className={`w-full py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs ${
-                        !canOrder
-                          ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                          : isRecentlyAdded
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-primary hover:bg-primary/90 text-white active:scale-95'
-                      }`}
-                    >
-                      {isRecentlyAdded ? (
-                        <>
-                          <Check size={14} strokeWidth={2.5} />
-                          <span>Added!</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingCart size={14} />
-                          <span>Add to Cart</span>
-                        </>
-                      )}
-                    </button>
+                    {/* Product Name & Price */}
+                    <div className="p-3.5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h4 className="font-bold text-xs sm:text-sm text-dark truncate mb-1" title={product.name}>
+                          {product.name}
+                        </h4>
+                        <p className="font-extrabold text-xs sm:text-sm text-primary mb-3">
+                          {formatPrice(product.price)}
+                        </p>
+                      </div>
+
+                      {/* Add to Cart Button */}
+                      <button 
+                        onClick={() => handleAddToCart(product)}
+                        disabled={!canOrder}
+                        className={`w-full py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs ${
+                          !canOrder
+                            ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                            : isRecentlyAdded
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-primary hover:bg-primary/90 text-white active:scale-95'
+                        }`}
+                      >
+                        {isRecentlyAdded ? (
+                          <>
+                            <Check size={14} strokeWidth={2.5} />
+                            <span>Added!</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart size={14} />
+                            <span>Add to Cart</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
       </div>
