@@ -583,16 +583,43 @@ async function startServer() {
         action: 'User Sign In'
       };
 
-      if (isConnected && matchedUser.save) {
+      if (isConnected) {
+        const hasArrayHistory = Array.isArray(matchedUser.loginHistory);
+        const updateOp: any = {
+          $set: {
+            failedLoginAttempts: 0,
+            lockoutUntil: null,
+            lastLogin: now
+          }
+        };
+
+        if (hasArrayHistory) {
+          updateOp.$push = {
+            loginHistory: {
+              $each: [newActivity],
+              $position: 0,
+              $slice: 20
+            }
+          };
+        } else {
+          updateOp.$set.loginHistory = [newActivity];
+        }
+
+        await User.updateOne(
+          { _id: matchedUser._id },
+          updateOp
+        );
+
         matchedUser.failedLoginAttempts = 0;
         matchedUser.lockoutUntil = null;
         matchedUser.lastLogin = now;
-        if (!matchedUser.loginHistory) matchedUser.loginHistory = [];
+        if (!Array.isArray(matchedUser.loginHistory)) {
+          matchedUser.loginHistory = [];
+        }
         matchedUser.loginHistory.unshift(newActivity);
         if (matchedUser.loginHistory.length > 20) {
           matchedUser.loginHistory = matchedUser.loginHistory.slice(0, 20);
         }
-        await matchedUser.save();
       } else if (matchedUser) {
         matchedUser.failedLoginAttempts = 0;
         matchedUser.lockoutUntil = null;
