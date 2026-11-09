@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import { Order, Product, InventoryItem, InventoryLog, User } from '../models';
 import { getDbStatus, memoryStore, mongoose } from '../db';
@@ -598,7 +599,10 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     const calculatedTotal = total !== undefined ? Number(total) : items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-    const orderId = req.body.id || `ORD-${Date.now()}`;
+    const randomSuffix = crypto.randomBytes(4).toString('hex');
+    const orderId = (req.body.id && typeof req.body.id === 'string' && req.body.id.trim())
+      ? req.body.id.trim()
+      : `ORD-${Date.now()}-${randomSuffix}`;
     const orderDate = req.body.date ? new Date(req.body.date) : new Date();
     const finalOrderType = orderType || (req.body.orderType || 'Online');
     const finalStatus = status || (finalOrderType === 'POS' ? 'Completed' : 'Pending');
@@ -947,8 +951,13 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 
     memoryStore.orders.push(orderDoc);
     return res.status(201).json(orderDoc);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating order:', error);
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        error: 'An order with this ID already exists. Duplicate order submission rejected.'
+      });
+    }
     res.status(500).json({ error: 'Failed to create order' });
   }
 });

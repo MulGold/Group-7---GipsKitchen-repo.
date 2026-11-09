@@ -136,9 +136,22 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
   }
 }
 
+// Helper to generate a collision-resistant temporary order ID using cryptographic randomness
+function generateTemporaryOrderId(): string {
+  let hexSuffix = '';
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    const arr = new Uint8Array(4);
+    window.crypto.getRandomValues(arr);
+    hexSuffix = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  } else {
+    hexSuffix = Math.random().toString(16).substring(2, 10).padEnd(8, '0');
+  }
+  return `ORD-${Date.now()}-${hexSuffix}`;
+}
+
 // 2. Create order in MongoDB backend (with automatic stock & inventory deduction)
 export async function createOrder(orderData: any): Promise<any> {
-  const tempId = orderData.id || `ORD-${Date.now()}`;
+  const tempId = orderData.id || generateTemporaryOrderId();
   const optimisticOrder = {
     ...orderData,
     id: tempId,
@@ -313,7 +326,7 @@ export const getOrders = (): any[] => {
 };
 
 export const saveOrder = (orderData: any): any => {
-  const tempId = orderData.id || `ORD-${Date.now()}`;
+  const tempId = orderData.id || generateTemporaryOrderId();
   const newOrder = {
     ...orderData,
     id: tempId,
